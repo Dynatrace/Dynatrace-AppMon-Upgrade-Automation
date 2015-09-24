@@ -7,7 +7,6 @@ usage ()
   exit
 }
 
-
 while [ "$1" != "" ]; do
     case $1 in
         -C | --current )        shift
@@ -28,11 +27,29 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [ -z $dynatraceDirectoryOld ] || [ -z $dynatraceDirectoryNew ] || [ -z $dynatraceInstallFile ]
+if [ -z $dynatraceDirectoryOld ]
 	then
-	echo "Not all arugments have been supplied"
+	echo "[-C CurrentDynatraceDirectory] arugment has not been supplied"
 	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename]"
 	exit
+if [ -z $dynatraceDirectoryNew ] 
+	then
+	echo "[-N NewDynatraceDirectory] arugment has not been supplied"
+	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename]"
+	exit
+if [ -z $dynatraceInstallFile ] 
+	then
+	echo "[-F Filename] arugment has not been supplied"
+	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename]"
+	exit
+fi
+
+if [[ $dynatraceDirectoryOld == *"/" ]]
+	then dynatraceDirectoryOld=$dynatraceDirectoryOld | rev | cut -c 2- | rev
+fi
+
+if [[ $dynatraceDirectoryNew == *"/" ]]
+	then dynatraceDirectoryNew=$dynatraceDirectoryNew | rev | cut -c 2- | rev
 fi
 
 #New Server Install
@@ -86,7 +103,5 @@ cd $dynatraceDirectory
 #echo Starting new Dynatrace service...
 #service dynaTraceServer start
 #$dynatraceDirectoryOld/init.d/dynaTraceServer start
-
-
 
 echo "Script Complete"

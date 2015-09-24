@@ -7,7 +7,6 @@ usage ()
   exit
 }
 
-
 while [ "$1" != "" ]; do
     case $1 in
         -C | --current )        shift
@@ -19,7 +18,7 @@ while [ "$1" != "" ]; do
         -F | --file )           shift
                                 dynatraceInstallFile=$1
                                 ;;
-		-B | --bit )        	shift
+	-B | --bit )        	shift
                                 dynatraceBit=$1
                                 ;;
         -h | --help )           usage
@@ -31,26 +30,34 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [[ "$1" == */ ]]
-	then dynatraceDirectoryOld=$dynatraceDirectoryOld | rev | cut -c 2- | rev
-fi
-
-if [[ "$1" == */ ]]
-	then dynatraceDirectoryNew=$1 | rev | cut -c 2- | rev
-fi
-
-echo $dynatraceDirectoryNew
-
-if [ -z $dynatraceDirectoryOld ] || [ -z $dynatraceDirectoryNew ] || [ -z $dynatraceInstallFile ]
+if [ -z $dynatraceDirectoryOld ]
 	then
-	echo "Not all arugments have been supplied"
-	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename]"
+	echo "[-C CurrentDynatraceDirectory] arugment has not been supplied"
+	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename] [-B Bit]"
+	exit
+if [ -z $dynatraceDirectoryNew ] 
+	then
+	echo "[-N NewDynatraceDirectory] arugment has not been supplied"
+	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename] [-B Bit]"
+	exit
+if [ -z $dynatraceInstallFile ] 
+	then
+	echo "[-F Filename] arugment has not been supplied"
+	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename] [-B Bit]"
+	exit
+if [ -z $dynatraceBit ]
+	then
+	echo "[-B Bit] arugment has not been supplied"
+	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename] [-B Bit]"
 	exit
 fi
 
-if [[ $dynatraceDirectoryOld == */ ]]
-then
-    dynatraceDirectoryOld=$dynatraceDirectoryOld | rev | cut -c 2- | rev
+if [[ $dynatraceDirectoryOld == *"/" ]]
+	then dynatraceDirectoryOld=$dynatraceDirectoryOld | rev | cut -c 2- | rev
+fi
+
+if [[ $dynatraceDirectoryNew == *"/" ]]
+	then dynatraceDirectoryNew=$dynatraceDirectoryNew | rev | cut -c 2- | rev
 fi
 
 #New Server Install
