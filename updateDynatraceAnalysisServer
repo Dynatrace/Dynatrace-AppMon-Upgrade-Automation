@@ -60,8 +60,8 @@ if [[ $dynatraceDirectoryNew == *"/" ]]
 	then dynatraceDirectoryNew=$dynatraceDirectoryNew | rev | cut -c 2- | rev
 fi
 
-#New Server Install
-echo Installing new Server...
+#New Analysis Server Install
+echo Installing new Analysis Server...
 mkdir $dynatraceDirectoryNew
 echo -e $dynatraceBit\\nN\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile
 

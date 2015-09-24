@@ -74,13 +74,13 @@ dynatraceDirectory=`find / -type f -iname "dtmigration.jar" -printf "%h\n" | sor
 cd $dynatraceDirectory
 echo java -jar dtmigration.jar -migration -sourceDTHome $dynatraceDirectoryOld -targetDTHome $dynatraceDirectoryNew
 java -jar dtmigration.jar -migration -sourceDTHome $dynatraceDirectoryOld -targetDTHome $dynatraceDirectoryNew -silent
-cd $dynatraceDirectoryNew
-sdiff dtserver.ini.ToBeMigrated dtserver.ini
-read -p "Press any key to continue..."
-vi dtserver.ini
+# cd $dynatraceDirectoryNew
+# sdiff dtserver.ini.ToBeMigrated dtserver.ini
+# read -p "Press any key to continue..."
+# vi dtserver.ini
 
-sdiff dtanalysisserver.ini.ToBeMigrated dtanalysisserver.ini
-read -p "Press any key to continue..."
+# sdiff dtanalysisserver.ini.ToBeMigrated dtanalysisserver.ini
+# read -p "Press any key to continue..."
 
 #Copy Session Files
 mkdir $dynatraceDirectoryNew/server/sessions

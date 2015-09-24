@@ -18,7 +18,7 @@ while [ "$1" != "" ]; do
         -F | --file )           shift
                                 dynatraceInstallFile=$1
                                 ;;
-	-B | --bit )        	shift
+		-B | --bit )        	shift
                                 dynatraceBit=$1
                                 ;;
         -h | --help )           usage
@@ -60,8 +60,8 @@ if [[ $dynatraceDirectoryNew == *"/" ]]
 	then dynatraceDirectoryNew=$dynatraceDirectoryNew | rev | cut -c 2- | rev
 fi
 
-#New Server Install
-echo Installing new Server...
+#New Collector Install
+echo Installing new Collector...
 mkdir $dynatraceDirectoryNew
 echo -e $dynatraceBit\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile
 
