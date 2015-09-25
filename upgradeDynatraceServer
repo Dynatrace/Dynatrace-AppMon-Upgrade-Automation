@@ -27,29 +27,24 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [ -z $dynatraceDirectoryOld ]
-	then
+if [ -z $dynatraceDirectoryOld ]; then
 	echo "[-C CurrentDynatraceDirectory] arugment has not been supplied"
 	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename]"
 	exit
-if [ -z $dynatraceDirectoryNew ] 
-	then
+elif [ -z $dynatraceDirectoryNew ]; then
 	echo "[-N NewDynatraceDirectory] arugment has not been supplied"
 	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename]"
 	exit
-if [ -z $dynatraceInstallFile ] 
-	then
+elif [ -z $dynatraceInstallFile ]; then
 	echo "[-F Filename] arugment has not been supplied"
 	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename]"
 	exit
 fi
 
-if [[ $dynatraceDirectoryOld == *"/" ]]
-	then dynatraceDirectoryOld=$dynatraceDirectoryOld | rev | cut -c 2- | rev
+if [[ $dynatraceDirectoryOld == *"/" ]]; then dynatraceDirectoryOld=`echo $dynatraceDirectoryOld | rev | cut -c 2- | rev`
 fi
 
-if [[ $dynatraceDirectoryNew == *"/" ]]
-	then dynatraceDirectoryNew=$dynatraceDirectoryNew | rev | cut -c 2- | rev
+if [[ $dynatraceDirectoryNew == *"/" ]]; then dynatraceDirectoryNew=`echo $dynatraceDirectoryNew | rev | cut -c 2- | rev`
 fi
 
 #New Server Install
@@ -57,51 +52,76 @@ echo Installing new Server...
 mkdir $dynatraceDirectoryNew
 echo -e N\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile
 
+#Migration
+echo Migrating Files...
+dynatraceDirectory=`find / -type f -name "dtmigration.jar" -printf "%h\n" | sort -u | grep "" -m 1`
+cd $dynatraceDirectory
+java -jar dtmigration.jar -migration -sourceDTHome $dynatraceDirectoryOld -targetDTHome $dynatraceDirectoryNew -silent
+
+#Migrate dtserver.ini
+diff -ruN $dynatraceDirectoryNew/dtserver.ini $dynatraceDirectoryNew/dtserver.ini.ToBeMigrated > /tmp/patchfile.patch
+grep -n '@@' /tmp/patchfile.patch > patchfileNew.patch
+length=`grep -c '.*' /tmp/patchfileNew.patch`
+echo $length
+if [[ $length == "2" ]]
+	then
+		deleteFromLine=`grep -n '@@' /tmp/patchfile.patch | cut -c 1-3| tail -1 | grep -o '[0-9]*'`
+		deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
+		deleteToLine="$deleteToLine"d
+		sed -e $deleteFromLine,$deleteToLine patchfile.patch > patchfileNew.patch
+	patch -p0 < /tmp/patchfileNew.patch
+else
+	patch -p0 < /tmp/patchfile.patch
+fi
+rm /tmp/patchfileNew.patch
+rm /tmp/patchfile.patch
+
+#Migrate dtfrontendserver.ini
+diff -ruN $dynatraceDirectoryNew/dtfrontendserver.ini $dynatraceDirectoryNew/dtfrontendserver.ini.ToBeMigrated > /tmp/patchfile.patch
+grep -n '@@' /tmp/patchfile.patch > patchfileNew.patch
+length=`grep -c '.*' /tmp/patchfileNew.patch`
+echo $length
+if [[ $length == "2" ]]
+	then
+		deleteFromLine=`grep -n '@@' /tmp/patchfile.patch | cut -c 1-3| tail -1 | grep -o '[0-9]*'`
+		deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
+		deleteToLine="$deleteToLine"d
+		sed -e $deleteFromLine,$deleteToLine patchfile.patch > patchfileNew.patch
+	patch -p0 < /tmp/patchfileNew.patch
+else
+	patch -p0 < /tmp/patchfile.patch
+fi
+rm /tmp/patchfileNew.patch
+rm /tmp/patchfile.patch
+
 #Stop old dynaTrace service
 echo Stopping Dynatrace...
 $dynatraceDirectoryOld/init.d/dynaTraceServer stop  
 
-#Removing old Startup scripts
-echo Removing old Startup scripts...
-cd /etc/init.d/
-update-rc.d dynaTraceServer remove
-#chkconfig --del dynaTraceServer
-rm dynaTraceServer
-
-#Migration
-echo Migrating Files...
-dynatraceDirectory=`find / -type f -iname "dtmigration.jar" -printf "%h\n" | sort -u | grep "" -m 1`
-cd $dynatraceDirectory
-echo java -jar dtmigration.jar -migration -sourceDTHome $dynatraceDirectoryOld -targetDTHome $dynatraceDirectoryNew
-java -jar dtmigration.jar -migration -sourceDTHome $dynatraceDirectoryOld -targetDTHome $dynatraceDirectoryNew -silent
-# cd $dynatraceDirectoryNew
-# sdiff dtserver.ini.ToBeMigrated dtserver.ini
-# read -p "Press any key to continue..."
-# vi dtserver.ini
-
-# sdiff dtanalysisserver.ini.ToBeMigrated dtanalysisserver.ini
-# read -p "Press any key to continue..."
-
 #Copy Session Files
 mkdir $dynatraceDirectoryNew/server/sessions
 mkdir $dynatraceDirectoryNew/server/sessions/stored
-cp -R $dynatraceDirectoryOld/server/sessions/stored $dynatraceDirectoryNew/server/sessions/stored
+mv -R $dynatraceDirectoryOld/server/sessions/stored $dynatraceDirectoryNew/server/sessions/stored
+
+#Start new dynaTrace service
+echo Starting new Dynatrace service...
+$dynatraceDirectoryNew/init.d/dynaTraceServer start
+
+#Removing old Startup scripts
+echo Removing old Startup scripts...
+cd /etc/init.d/
+if [[ $osVersion == *Ubuntu* ]]; then update-rc.d dynaTraceServer remove
+else chkconfig --del dynaTraceServer
+fi
+rm dynaTraceServer
 
 #Automatic start configuration
 echo Adding Startup scripts...
 cp $dynatraceDirectoryNew/init.d/dynaTraceServer /etc/init.d/
 cd /etc/init.d/
 osVersion=`lsb_release -a | grep 'Distributor ID' -m 1`
-if [[ $osVersion == *Ubuntu* ]]; then
-	update-rc.d dynaTraceServer defaults
-else
-	chkconfig --add dynaTraceServer
+if [[ $osVersion == *Ubuntu* ]]; then update-rc.d dynaTraceServer defaults
+else chkconfig --add dynaTraceServer
 fi
-cd $dynatraceDirectory
-
-#Start new dynaTrace service
-#echo Starting new Dynatrace service...
-#service dynaTraceServer start
-#$dynatraceDirectoryOld/init.d/dynaTraceServer start
 
 echo "Script Complete"
