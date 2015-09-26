@@ -81,6 +81,8 @@ if [[ $length == "2" ]]
 		deleteToLine="$deleteToLine"d
 		sed -e $deleteFromLine,$deleteToLine patchfile.patch > patchfileNew.patch
 	patch -p0 < /tmp/patchfileNew.patch
+elif [[ $length == "0" ]]
+	echo No patching of .ini file needed
 else
 	patch -p0 < /tmp/patchfile.patch
 fi
@@ -98,6 +100,7 @@ $dynatraceDirectoryNew/init.d/dynaTraceCollector start
 #Removing old Startup scripts
 echo Removing old Startup scripts...
 cd /etc/init.d/
+osVersion=`lsb_release -a | grep 'Distributor ID' -m 1`
 if [[ $osVersion == *Ubuntu* ]]; then update-rc.d dynaTraceCollector remove
 else chkconfig --del dynaTraceCollector
 fi
@@ -107,7 +110,6 @@ rm dynaTraceCollector
 echo Adding Startup scripts...
 cp $dynatraceDirectoryNew/init.d/dynaTraceCollector /etc/init.d/
 cd /etc/init.d/
-osVersion=`lsb_release -a | grep 'Distributor ID' -m 1`
 if [[ $osVersion == *Ubuntu* ]]; then update-rc.d dynaTraceCollector defaults
 else chkconfig --add dynaTraceCollector
 fi
