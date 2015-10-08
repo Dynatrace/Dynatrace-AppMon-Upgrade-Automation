@@ -50,7 +50,7 @@ fi
 #New Server Install
 echo Installing new Server...
 mkdir $dynatraceDirectoryNew
-echo -e N\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile
+echo -e N\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile | tail -1
 
 #Migration
 echo Migrating Files...
@@ -69,10 +69,11 @@ if [[ $length == "2" ]]
 		deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
 		deleteToLine="$deleteToLine"d
 		sed -e $deleteFromLine,$deleteToLine patchfile.patch > patchfileNew.patch
-	patch -p0 < /tmp/patchfileNew.patch
-else
-	patch -p0 < /tmp/patchfile.patch
+	patch -f -p0 < /tmp/patchfileNew.patch
+elif [[ $length == "0" ]]; then	echo No patching of .ini file needed
+else patch -f -p0 < /tmp/patchfile.patch
 fi
+rm $dynatraceDirectoryNew/dtserver.ini.ToBeMigrated
 rm /tmp/patchfileNew.patch
 rm /tmp/patchfile.patch
 
@@ -87,12 +88,11 @@ if [[ $length == "2" ]]
 		deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
 		deleteToLine="$deleteToLine"d
 		sed -e $deleteFromLine,$deleteToLine patchfile.patch > patchfileNew.patch
-	patch -p0 < /tmp/patchfileNew.patch
-elif [[ $length == "0" ]]
-	echo No patching of .ini file needed
-else
-	patch -p0 < /tmp/patchfile.patch
+	patch -f -p0 < /tmp/patchfileNew.patch
+elif [[ $length == "0" ]]; then	echo No patching of .ini file needed
+else patch -f -p0 < /tmp/patchfile.patch
 fi
+rm $dynatraceDirectoryNew/dtfrontendserver.ini.ToBeMigrated
 rm /tmp/patchfileNew.patch
 rm /tmp/patchfile.patch
 

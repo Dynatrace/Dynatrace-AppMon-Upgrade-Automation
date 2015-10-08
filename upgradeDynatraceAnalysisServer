@@ -61,11 +61,11 @@ fi
 #New Analysis Server Install
 echo Installing new Analysis Server...
 mkdir $dynatraceDirectoryNew
-echo -e $dynatraceBit\\nN\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile
+echo -e $dynatraceBit\\nN\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile | tail -1
 
 #Migrate dtanalysis.ini
 echo Migrating Files...
-diff -ruN $dynatraceDirectoryNew/dtanalysisserver.ini $dynatraceDirectoryNew/dtanalysis.ini.ToBeMigrated > /tmp/patchfile.patch
+diff -ruN $dynatraceDirectoryNew/dtanalysisserver.ini $dynatraceDirectoryOld/dtanalysis.ini > /tmp/patchfile.patch
 grep -n '@@' /tmp/patchfile.patch > patchfileNew.patch
 length=`grep -c '.*' /tmp/patchfileNew.patch`
 echo $length
@@ -75,14 +75,10 @@ if [[ $length == "2" ]]
 		deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
 		deleteToLine="$deleteToLine"d
 		sed -e $deleteFromLine,$deleteToLine patchfile.patch > patchfileNew.patch
-	patch -p0 < /tmp/patchfileNew.patch
-elif [[ $length == "0" ]]
-	echo No patching of .ini file needed
-else
-	patch -p0 < /tmp/patchfile.patch
+	patch -f -p0 < /tmp/patchfileNew.patch
+elif [[ $length == "0" ]]; then	echo No patching of .ini file needed
+else patch -f -p0 < /tmp/patchfile.patch
 fi
-rm /tmp/patchfileNew.patch
-rm /tmp/patchfile.patch
 
 #Stop old dynaTrace service
 echo Stopping Dynatrace...
