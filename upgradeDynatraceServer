@@ -70,7 +70,7 @@ fi
 #Migration
 echo Migrating Files...
 #dynatraceDirectory=`find / -type f -name "dtmigration.jar" -printf "%h\n" | sort -u | grep "" -m 1`
-migrationResult = `java -jar $dtMigrationJar -migration -sourceDTHome $dynatraceDirectoryOld -targetDTHome $dynatraceDirectoryNew -silent | grep -o '*MIGRATION_DONE*'`
+migrationResult=$(java -jar $dtMigrationJar -migration -sourceDTHome $dynatraceDirectoryOld -targetDTHome $dynatraceDirectoryNew -silent | grep -o '*MIGRATION_DONE*')
 if [[ $migrationResult == *"MIGRATION_DONE_SUCCESSFULLY"* ]]; then
 	echo Migration finished successfully.
 else

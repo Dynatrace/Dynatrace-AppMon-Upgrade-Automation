@@ -76,7 +76,14 @@ else
 
 #Migration
 echo Migrating Files...
-java -jar $dtMigrationJar -migration -sourceDTHome $dynatraceDirectoryOld/ -targetDTHome $dynatraceDirectoryNew/ -silent
+migrationResult=$(java -jar $dtMigrationJar -migration -sourceDTHome $dynatraceDirectoryOld/ -targetDTHome $dynatraceDirectoryNew/ -silent)
+if [[ $migrationResult == *"MIGRATION_DONE_SUCCESSFULLY"* ]]; then
+	echo Migration finished successfully.
+else
+	echo Migration failed!
+	echo Migration script will exit.
+	exit 
+fi
 wait ${!}
 
 #Migrate dtcollector.ini
