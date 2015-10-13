@@ -2,8 +2,8 @@
 
 usage ()
 {
-  echo 'Usage : updateDynatraceServer -C <new Dynatrace directory> -N <new Dynatrace directory> -F <file>'
-  echo 'i.e.  : updateDynatraceServer -C /opt/dynaTrace-6.1/ -N /opt/dynaTrace-6.2/ -F /tmp/dynaTraceUpgrade.jar/'
+  echo 'Usage : updateDynatraceServer -C <new Dynatrace directory> -N <new Dynatrace directory> -F <file> -M <dtmigration.jar path>'
+  echo 'i.e.  : updateDynatraceServer -C /opt/dynaTrace-6.1/ -N /opt/dynaTrace-6.2/ -F /tmp/dynaTraceUpgrade.jar/ -M /tmp/dtmigration.jar'
   exit
 }
 
