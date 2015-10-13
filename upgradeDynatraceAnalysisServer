@@ -2,8 +2,8 @@
 
 usage ()
 {
-  echo 'Usage : updateDynatraceAnalysisServer.sh -C <new Dynatrace directory> -N <new Dynatrace directory> -F <file> -B <64/32 bit>'
-  echo 'i.e.  : updateDynatraceAnalysisServer.sh -C /opt/dynaTrace-6.1/ -N /opt/dynaTrace-6.2/ -F /tmp/dynaTraceUpgrade.jar -B 64'
+  echo 'Usage : updateDynatraceAnalysisServer -C <new Dynatrace directory> -N <new Dynatrace directory> -F <file> -B <64/32 bit>'
+  echo 'i.e.  : updateDynatraceAnalysisServer -C /opt/dynaTrace-6.1/ -N /opt/dynaTrace-6.2/ -F /tmp/dynaTraceUpgrade.jar -B 64'
   exit
 }
 
@@ -20,7 +20,7 @@ while [ "$1" != "" ]; do
                                 ;;
 		-B | --bit )        	shift
                                 dynatraceBit=$1
-                                ;;
+                                ;;							
         -h | --help )           usage
                                 exit
                                 ;;
@@ -61,28 +61,56 @@ fi
 #New Analysis Server Install
 echo Installing new Analysis Server...
 mkdir $dynatraceDirectoryNew
-echo -e $dynatraceBit\\nN\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile | tail -1
+installationResult=$(echo -e $dynatraceBit\\nN\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile | tail -1)
+if [[ $installationResult == "Installation finished successfully"* ]]; then
+	echo Installation finished successfully.
+else
+	echo Installation failed!
+	echo Migration script will exit.
+	exit
+fi
 
-#Migrate dtanalysis.ini
+#Migrate dtanalysisserver.ini
 echo Migrating Files...
-diff -ruN $dynatraceDirectoryNew/dtanalysisserver.ini $dynatraceDirectoryOld/dtanalysis.ini > /tmp/patchfile.patch
-grep -n '@@' /tmp/patchfile.patch > patchfileNew.patch
-length=`grep -c '.*' /tmp/patchfileNew.patch`
-echo $length
-if [[ $length == "2" ]]
+
+if [ -f $dynatraceDirectoryNew/dtanalysisserver.ini ] && [ -f $dynatraceDirectoryOld/dtanalysisserver.ini ]
 	then
-		deleteFromLine=`grep -n '@@' /tmp/patchfile.patch | cut -c 1-3| tail -1 | grep -o '[0-9]*'`
-		deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
-		deleteToLine="$deleteToLine"d
-		sed -e $deleteFromLine,$deleteToLine patchfile.patch > patchfileNew.patch
-	patch -f -p0 < /tmp/patchfileNew.patch
-elif [[ $length == "0" ]]; then	echo No patching of .ini file needed
-else patch -f -p0 < /tmp/patchfile.patch
+		diff -ruN $dynatraceDirectoryNew/dtanalysisserver.ini $dynatraceDirectoryOld/dtanalysisserver.ini > /tmp/patchfile.patch
+		grep -n '@@' /tmp/patchfile.patch > /tmp/patchfileNew.patch
+		length=`grep -c '.*' /tmp/patchfileNew.patch`
+		echo $length
+		if [[ $length == "2" ]]
+			then
+				deleteFromLine=`grep -n '@@' /tmp/patchfile.patch | cut -c 1-3| tail -1 | grep -o '[0-9]*'`
+				deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
+				deleteToLine="$deleteToLine"d
+				sed -e $deleteFromLine,$deleteToLine /tmp/patchfile.patch > /tmp/patchfileNew.patch
+			patch -f -p2 < /tmp/patchfileNew.patch
+		elif [[ $length == "0" ]]; then	echo "No patching of .ini file needed"
+		else patch -f -p2 < /tmp/patchfile.patch
+		fi
+else
+	echo Old or new dtanalysisserver.ini could not be found!
+	echo Migration script will exit.
+	exit
+fi
+#rm $dynatraceDirectoryNew/dtanalysisserver.ini..[Tt]o[Bb]e[Mm]igrated
+rm /tmp/patchfileNew.patch
+rm /tmp/patchfile.patch
+if [ -z `grep -c '.*' $dynatraceDirectoryNew/dtanalysisserver.ini` ] || [ `grep -c '.*' $dynatraceDirectoryNew/dtanalysisserver.ini` == "" ] || [ ! -f $dynatraceDirectoryNew/dtanalysisserver.ini ]
+	then
+		echo Migration failed!
+		echo Migration script will exit.
+	exit
 fi
 
 #Stop old dynaTrace service
 echo Stopping Dynatrace...
-$dynatraceDirectoryOld/init.d/dynaTraceAnalysis stop 
+pidID=`ps -ax | grep 'name dtanalysisserver' | grep -v 'grep' | cut -d' ' -f1`
+$dynatraceDirectoryOld/init.d/dynaTraceAnalysis stop
+if ! [ -z $pidID ]; then
+	while [ -e /proc/$pidID ]; do sleep 0.1; done
+fi
 
 #Start new dynaTrace service
 echo Starting new Dynatrace service...

@@ -2,8 +2,8 @@
 
 usage ()
 {
-  echo 'Usage : updateDynatraceServer.sh -C <new Dynatrace directory> -N <new Dynatrace directory> -F <file>'
-  echo 'i.e.  : updateDynatraceServer.sh -C /opt/dynaTrace-6.1/ -N /opt/dynaTrace-6.2/ -F /tmp/dynaTraceUpgrade.jar/'
+  echo 'Usage : updateDynatraceServer -C <new Dynatrace directory> -N <new Dynatrace directory> -F <file>'
+  echo 'i.e.  : updateDynatraceServer -C /opt/dynaTrace-6.1/ -N /opt/dynaTrace-6.2/ -F /tmp/dynaTraceUpgrade.jar/'
   exit
 }
 
@@ -18,6 +18,9 @@ while [ "$1" != "" ]; do
         -F | --file )           shift
                                 dynatraceInstallFile=$1
                                 ;;
+		-M | --migration )      shift
+                                dtMigrationJar=$1
+                                ;;
         -h | --help )           usage
                                 exit
                                 ;;
@@ -29,15 +32,20 @@ done
 
 if [ -z $dynatraceDirectoryOld ]; then
 	echo "[-C CurrentDynatraceDirectory] arugment has not been supplied"
-	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename]"
+	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename] [-M Migration]"
 	exit
 elif [ -z $dynatraceDirectoryNew ]; then
 	echo "[-N NewDynatraceDirectory] arugment has not been supplied"
-	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename]"
+	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename] [-M Migration]"
 	exit
 elif [ -z $dynatraceInstallFile ]; then
 	echo "[-F Filename] arugment has not been supplied"
-	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename]"
+	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename] [-M Migration]"
+	exit
+elif [ -z $dtMigrationJar ]
+	then
+	echo "[-M Migration] arugment has not been supplied"
+	echo "Please provide all parameters [-C CurrentDynatraceDirectory] [-N NewDynatraceDirectory] [-F Filename] [-M Migration]"
 	exit
 fi
 
@@ -50,55 +58,99 @@ fi
 #New Server Install
 echo Installing new Server...
 mkdir $dynatraceDirectoryNew
-echo -e N\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile | tail -1
+installationResult=$(echo -e N\\n$dynatraceDirectoryNew\\nY\\nY | java -jar $dynatraceInstallFile | tail -1)
+if [[ $installationResult == "Installation finished successfully"* ]]; then
+	echo Installation finished successfully.
+else
+	echo Installation failed!
+	echo Migration script will exit.
+	exit
+fi	
 
 #Migration
 echo Migrating Files...
-dynatraceDirectory=`find / -type f -name "dtmigration.jar" -printf "%h\n" | sort -u | grep "" -m 1`
-cd $dynatraceDirectory
-java -jar dtmigration.jar -migration -sourceDTHome $dynatraceDirectoryOld -targetDTHome $dynatraceDirectoryNew -silent
+#dynatraceDirectory=`find / -type f -name "dtmigration.jar" -printf "%h\n" | sort -u | grep "" -m 1`
+migrationResult = `java -jar $dtMigrationJar -migration -sourceDTHome $dynatraceDirectoryOld -targetDTHome $dynatraceDirectoryNew -silent | grep -o '*MIGRATION_DONE*'`
+if [[ $migrationResult == *"MIGRATION_DONE_SUCCESSFULLY"* ]]; then
+	echo Migration finished successfully.
+else
+	echo Migration failed!
+	echo Migration script will exit.
+	exit 
+fi
+wait ${!}
 
 #Migrate dtserver.ini
-diff -ruN $dynatraceDirectoryNew/dtserver.ini $dynatraceDirectoryNew/dtserver.ini.ToBeMigrated > /tmp/patchfile.patch
-grep -n '@@' /tmp/patchfile.patch > patchfileNew.patch
-length=`grep -c '.*' /tmp/patchfileNew.patch`
-echo $length
-if [[ $length == "2" ]]
+if [ -f $dynatraceDirectoryNew/dtserver.ini ] && [ -f $dynatraceDirectoryOld/dtserver.ini ]
 	then
-		deleteFromLine=`grep -n '@@' /tmp/patchfile.patch | cut -c 1-3| tail -1 | grep -o '[0-9]*'`
-		deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
-		deleteToLine="$deleteToLine"d
-		sed -e $deleteFromLine,$deleteToLine patchfile.patch > patchfileNew.patch
-	patch -f -p0 < /tmp/patchfileNew.patch
-elif [[ $length == "0" ]]; then	echo No patching of .ini file needed
-else patch -f -p0 < /tmp/patchfile.patch
+		diff -ruN $dynatraceDirectoryNew/dtserver.ini $dynatraceDirectoryNew/dtserver.ini.[Tt]o[Bb]e[Mm]igrated > /tmp/patchfile.patch
+		grep -n '@@' /tmp/patchfile.patch > /tmp/patchfileNew.patch
+		length=`grep -c '.*' /tmp/patchfileNew.patch`
+		echo $length
+		if [[ $length == "2" ]]
+			then
+				deleteFromLine=`grep -n '@@' /tmp/patchfile.patch | cut -c 1-3| tail -1 | grep -o '[0-9]*'`
+				deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
+				deleteToLine="$deleteToLine"d
+				sed -e $deleteFromLine,$deleteToLine /tmp/patchfile.patch > /tmp/patchfileNew.patch
+			patch -f -p2 < /tmp/patchfileNew.patch
+		elif [[ $length == "0" ]]; then	echo "No patching of .ini file needed"
+		else patch -f -p2 < /tmp/patchfile.patch
+		fi
+		#rm $dynatraceDirectoryNew/dtserver.ini..[Tt]o[Bb]e[Mm]igrated
+		rm /tmp/patchfileNew.patch
+		rm /tmp/patchfile.patch
+		if [ -z `grep -c '.*' $dynatraceDirectoryNew/dtserver.ini`] || [ `grep -c '.*' $dynatraceDirectoryNew/dtserver.ini` == ""] || [ ! -f $dynatraceDirectoryNew/dtserver.ini ]
+			then
+			echo Migration failed!
+			echo Migration script will exit.
+			exit
+		fi
+else
+	echo Old or new dtserver.ini could not be found!
+	echo Migration script will exit.
+	exit
 fi
-rm $dynatraceDirectoryNew/dtserver.ini.ToBeMigrated
-rm /tmp/patchfileNew.patch
-rm /tmp/patchfile.patch
 
 #Migrate dtfrontendserver.ini
-diff -ruN $dynatraceDirectoryNew/dtfrontendserver.ini $dynatraceDirectoryNew/dtfrontendserver.ini.ToBeMigrated > /tmp/patchfile.patch
-grep -n '@@' /tmp/patchfile.patch > patchfileNew.patch
-length=`grep -c '.*' /tmp/patchfileNew.patch`
-echo $length
-if [[ $length == "2" ]]
+if [ -f $dynatraceDirectoryNew/dtfrontendserver.ini ] && [ -f $dynatraceDirectoryOld/dtfrontendserver.ini ]
 	then
-		deleteFromLine=`grep -n '@@' /tmp/patchfile.patch | cut -c 1-3| tail -1 | grep -o '[0-9]*'`
-		deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
-		deleteToLine="$deleteToLine"d
-		sed -e $deleteFromLine,$deleteToLine patchfile.patch > patchfileNew.patch
-	patch -f -p0 < /tmp/patchfileNew.patch
-elif [[ $length == "0" ]]; then	echo No patching of .ini file needed
-else patch -f -p0 < /tmp/patchfile.patch
+		diff -ruN $dynatraceDirectoryNew/dtfrontendserver.ini $dynatraceDirectoryNew/dtfrontendserver.ini.[Tt]o[Bb]e[Mm]igrated > /tmp/patchfile.patch
+		grep -n '@@' /tmp/patchfile.patch > /tmp/patchfileNew.patch
+		length=`grep -c '.*' /tmp/patchfileNew.patch`
+		echo $length
+		if [[ $length == "2" ]]
+			then
+				deleteFromLine=`grep -n '@@' /tmp/patchfile.patch | cut -c 1-3| tail -1 | grep -o '[0-9]*'`
+				deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
+				deleteToLine="$deleteToLine"d
+				sed -e $deleteFromLine,$deleteToLine /tmp/patchfile.patch > /tmp/patchfileNew.patch
+			patch -f -p0 < /tmp/patchfileNew.patch
+		elif [[ $length == "0" ]]; then	echo "No patching of .ini file needed"
+		else patch -f -p0 < /tmp/patchfile.patch
+		fi
+		#rm $dynatraceDirectoryNew/dtfrontendserver.ini.[Tt]o[Bb]e[Mm]igrated
+		rm /tmp/patchfileNew.patch
+		rm /tmp/patchfile.patch
+		if [ -z `grep -c '.*' $dynatraceDirectoryNew/dtfrontendserver.ini`] || [ `grep -c '.*' $dynatraceDirectoryNew/dtfrontendserver.ini` == ""] || [ ! -f $dynatraceDirectoryNew/dtfrontendserver.ini ]
+			then
+				echo Migration failed!
+				echo Migration script will exit.
+			exit 
+		fi
+else
+	echo Old or new dtfrontendserver.ini could not be found!
+	echo Migration script will exit.
+	exit
 fi
-rm $dynatraceDirectoryNew/dtfrontendserver.ini.ToBeMigrated
-rm /tmp/patchfileNew.patch
-rm /tmp/patchfile.patch
 
 #Stop old dynaTrace service
 echo Stopping Dynatrace...
-$dynatraceDirectoryOld/init.d/dynaTraceServer stop  
+pidID=`ps -ax | grep 'name dtserver' | grep -v 'grep' | cut -d' ' -f1`
+$dynatraceDirectoryOld/init.d/dynaTraceServer stop
+if ! [ -z $pidID ]; then
+	while [ -e /proc/$pidID ]; do sleep 0.1; done
+fi
 
 #Copy Session Files
 mkdir $dynatraceDirectoryNew/server/sessions
