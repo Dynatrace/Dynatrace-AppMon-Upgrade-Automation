@@ -1,9 +1,10 @@
 #!/bin/bash
+#Version Beta 0.94
 
 usage ()
 {
-  echo 'Usage : updateDynatraceAnalysisServer -C <new Dynatrace directory> -N <new Dynatrace directory> -F <file> -B <64/32 bit>'
-  echo 'i.e.  : updateDynatraceAnalysisServer -C /opt/dynaTrace-6.1/ -N /opt/dynaTrace-6.2/ -F /tmp/dynaTraceUpgrade.jar -B 64'
+  echo 'Usage : upgradeDynatraceAnalysisServer -C <old Dynatrace directory> -N <new Dynatrace directory> -F <file> -B <64/32 bit>'
+  echo 'i.e.  : upgradeDynatraceAnalysisServer -C /opt/dynaTrace-6.1/ -N /opt/dynaTrace-6.2/ -F /tmp/dynatrace-analysisserver-6.2.0.1239-linux-x86.jar -B 64'
   exit
 }
 
@@ -72,41 +73,40 @@ fi
 
 #Migrate dtanalysisserver.ini
 echo Migrating Files...
-
 if [ -f $dynatraceDirectoryNew/dtanalysisserver.ini ] && [ -f $dynatraceDirectoryOld/dtanalysisserver.ini ]
 	then
 		diff -ruN $dynatraceDirectoryNew/dtanalysisserver.ini $dynatraceDirectoryOld/dtanalysisserver.ini > /tmp/patchfile.patch
-		grep -n '@@' /tmp/patchfile.patch > /tmp/patchfileNew.patch
-		length=`grep -c '.*' /tmp/patchfileNew.patch`
-		echo $length
-		if [[ $length == "2" ]]
-			then
+		length=`grep -n '@@' /tmp/patchfile.patch | wc -l`
+		if [[ $length == "0" ]]; then echo "No patching of .ini file needed"
+		elif [[ $length == "1" ]]; then patch -f -p2 < /tmp/patchfile.patch
+		elif [[ $length == "2" ]]; then
 				deleteFromLine=`grep -n '@@' /tmp/patchfile.patch | cut -c 1-3| tail -1 | grep -o '[0-9]*'`
 				deleteToLine=`grep -n "" /tmp/patchfile.patch | cut -c 1-3 | tail -1 | grep -o '[0-9]*'`
 				deleteToLine="$deleteToLine"d
 				sed -e $deleteFromLine,$deleteToLine /tmp/patchfile.patch > /tmp/patchfileNew.patch
 			patch -f -p2 < /tmp/patchfileNew.patch
-		elif [[ $length == "0" ]]; then	echo "No patching of .ini file needed"
-		else patch -f -p2 < /tmp/patchfile.patch
+			rm /tmp/patchfileNew.patch
+		else
+			echo Patching of ini files failed!
+			echo Migration script will exit.
+			exit
+		fi
+		rm /tmp/patchfile.patch
+		if [ ! -f $dynatraceDirectoryNew/dtanalysisserver.ini ] || [ ! -s $dynatraceDirectoryNew/dtanalysisserver.ini ]
+			then
+				echo Migration failed! The dtanalysisserver.ini does not exist or is empty.
+				echo Migration script will exit.
+			exit
 		fi
 else
 	echo Old or new dtanalysisserver.ini could not be found!
 	echo Migration script will exit.
 	exit
 fi
-#rm $dynatraceDirectoryNew/dtanalysisserver.ini..[Tt]o[Bb]e[Mm]igrated
-rm /tmp/patchfileNew.patch
-rm /tmp/patchfile.patch
-if [ -z `grep -c '.*' $dynatraceDirectoryNew/dtanalysisserver.ini` ] || [ `grep -c '.*' $dynatraceDirectoryNew/dtanalysisserver.ini` == "" ] || [ ! -f $dynatraceDirectoryNew/dtanalysisserver.ini ]
-	then
-		echo Migration failed!
-		echo Migration script will exit.
-	exit
-fi
 
 #Stop old dynaTrace service
 echo Stopping Dynatrace...
-pidID=`ps -ax | grep 'name dtanalysisserver' | grep -v 'grep' | cut -d' ' -f1`
+pidID=`ps -ef | grep 'name dtanalysisserver' | grep -v 'grep' | cut -d' ' -f7` 
 $dynatraceDirectoryOld/init.d/dynaTraceAnalysis stop
 if ! [ -z $pidID ]; then
 	while [ -e /proc/$pidID ]; do sleep 0.1; done
@@ -116,21 +116,40 @@ fi
 echo Starting new Dynatrace service...
 $dynatraceDirectoryOld/init.d/dynaTraceAnalysis start
 
-#Removing old Startup scripts
-echo Removing old Startup scripts...
+#Automatic start configuration
+echo Automatic start configuration...
 cd /etc/init.d/
 osVersion=`lsb_release -a | grep 'Distributor ID' -m 1`
-if [[ $osVersion == *Ubuntu* ]]; then update-rc.d dynaTraceAnalysis remove
-else chkconfig --del dynaTraceAnalysis
+if [[ $osVersion == *Ubuntu* ]]; then
+	lineCount=`stat -t /etc/rc3.d/*dynaTraceAnalysis* | wc -l`
+	if [ $lineCount -gt 0 ]; then 
+		update-rc.d -f dynaTraceAnalysis remove
+		rm dynaTraceAnalysis
+		cp $dynatraceDirectoryNew/init.d/dynaTraceAnalysis /etc/init.d/
+		cd /etc/init.d/
+		update-rc.d dynaTraceAnalysis start 20 3 5 . stop 80 0 1 2 6 .
+		echo updatedAutoScripts
+	elif grep -Fxq "$dynatraceDirectoryOld/init.d/dynaTraceAnalysis start" /etc/rc.local; then 
+		sed -i 's|'"$dynatraceDirectoryOld/init.d/dynaTraceAnalysis start"'|'"$dynatraceDirectoryNew/init.d/dynaTraceAnalysis start"'|g' /etc/rc.local
+	else 
+		echo "Neither update-rc.d nor /etc/rc.local are used to start Dynatrace AM services on startup"
+		echo "Please manually modify the automatic startup of Dynatrace AM services"
+	fi
+else
+	lineCount=`chkconfig dynaTraceAnalysis --list | wc -l`
+	if grep -Fxq "$dynatraceDirectoryOld/init.d/dynaTraceAnalysis start" /etc/rc.local
+		then sed -i 's|'"$dynatraceDirectoryOld/init.d/dynaTraceAnalysis start"'|'"$dynatraceDirectoryNew/init.d/dynaTraceAnalysis start"'|g' /etc/rc.local
+	elif [ $lineCount -gt 0 ]; then
+		cd /etc/init.d/
+		chkconfig --del dynaTraceAnalysis
+		rm dynaTraceAnalysis
+		cp $dynatraceDirectoryNew/init.d/dynaTraceAnalysis /etc/init.d/
+		chkconfig --add dynaTraceAnalysis
+	else 
+		echo "Neither chkconfig nor /etc/rc.local are used to start Dynatrace AM services on startup"
+		echo "Please manually modify the automatic startup of Dynatrace AM services"
+		#echo "$dynatraceDirectoryNew/init.d/dynaTraceAnalysis start" >> "/etc/rc.local"  #appends startup to rc.local
+	fi
 fi
-rm dynaTraceAnalysis
 
-#Automatic start configuration
-echo Adding Startup scripts...
-cp $dynatraceDirectoryNew/init.d/dynaTraceAnalysis /etc/init.d/
-cd /etc/init.d/
-if [[ $osVersion == *Ubuntu* ]]; then update-rc.d dynaTraceAnalysis defaults
-else chkconfig --add dynaTraceAnalysis
-fi
-
-echo Script Complete
+echo "Script Complete"
